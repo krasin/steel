@@ -105,6 +105,7 @@ func main() {
 If no STL file is specified, it will read from stdin`,
 		Run: scale,
 	}
+
 	scaleCmd.Flags().Float64VarP(&scaleX, "x", "x", 1, "Scale factor")
 	scaleCmd.Flags().StringVarP(&outPath, "output", "o", "", "Output STL file. By default, it's stdout")
 	rootCmd.AddCommand(infoCmd)
