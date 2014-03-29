@@ -36,15 +36,12 @@ func openOut(path string) (io.WriteCloser, error) {
 }
 
 func info(cmd *cobra.Command, args []string) {
-	if len(args) == 0 {
-		fail("STL input file not specified")
-	}
-	f, err := os.Open(args[0])
+	r, err := openIn(args)
 	if err != nil {
 		fail(err)
 	}
-	defer f.Close()
-	t, err := stl.Read(f)
+	defer r.Close()
+	t, err := stl.Read(r)
 	if err != nil {
 		fail("Failed to read STL file:", err)
 	}
@@ -95,8 +92,9 @@ func main() {
 	infoCmd := &cobra.Command{
 		Use:   "info [STL file]",
 		Short: "STL file info",
-		Long:  "info displays STL metrics, such as the number of triangles, bounding box, etc",
-		Run:   info,
+		Long: `info displays STL metrics, such as the number of triangles, bounding box, etc.
+If no STL file is specified, it will read from stdin`,
+		Run: info,
 	}
 	scaleCmd := &cobra.Command{
 		Use:   "scale [STL file]",
