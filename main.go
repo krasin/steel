@@ -27,6 +27,8 @@ func info(cmd *cobra.Command, args []string) {
 		fail("Failed to read STL file:", err)
 	}
 	fmt.Printf("Triangles: %d\n", len(t))
+	min, max := stl.BoundingBox(t)
+	fmt.Printf("Bounding box: %v - %v\n", min, max)
 }
 
 func main() {
