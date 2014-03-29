@@ -162,7 +162,23 @@ func slice(cmd *cobra.Command, args []string) {
 			fmt.Fprintf(w, "<path d=\"M%s L%s L%s L%s\"/>\n", pxy(tr.V[0]), pxy(tr.V[1]), pxy(tr.V[2]), pxy(tr.V[0]))
 			continue
 		}
-		// We need to draw a line
+
+		// OK, it's the line. Two cases: line is a triangle side, or it's not.
+		// First, let's check if it's a triangle side.
+		was := false
+		for i := 0; i < 3; i++ {
+			j := (i + 1) % 3
+			if eq(tr.V[i]) && eq(tr.V[j]) {
+				fmt.Fprintf(w, "<path d='M%s L%s' />\n", pxy(tr.V[i]), pxy(tr.V[j]))
+				was = true
+				break
+			}
+		}
+		if was {
+			continue
+		}
+
+		// The line is not a triangle side.
 		fmt.Fprintf(w, "<!-- here be a line -->\n")
 	}
 
