@@ -18,6 +18,7 @@ var (
 	coordY  float64
 	coordZ  float64
 	outPath string
+	verbose bool
 )
 
 func fail(args ...interface{}) {
@@ -126,6 +127,13 @@ func slice(cmd *cobra.Command, args []string) {
 	less := func(p stl.Point) bool { return p[si] < sv-eps }
 	more := func(p stl.Point) bool { return p[si] > sv+eps }
 	eq := func(p stl.Point) bool { return !less(p) && !more(p) }
+	intersect := func(p0, p1 stl.Point) (res stl.Point) {
+		alpha := (sv - p0[si]) / (p1[si] - p0[si])
+		for i := 0; i < 3; i++ {
+			res[i] = p0[i] + alpha*(p1[i]-p0[i])
+		}
+		return
+	}
 
 	// SVG file will have units of 0.01 mm, and the input STL file is treated as mm.
 	pmm := func(v float32) int { return int(v * 100) }
@@ -149,11 +157,15 @@ func slice(cmd *cobra.Command, args []string) {
 
 		// First, let's detect the triangles to skip.
 		if less(tr.V[0]) && less(tr.V[1]) && less(tr.V[2]) {
-			fmt.Fprintf(w, "<!-- skip a triangle; it's below: %v -->\n", tr.V)
+			if verbose {
+				fmt.Fprintf(w, "<!-- skip a triangle; it's below: %v -->\n", tr.V)
+			}
 			continue
 		}
 		if more(tr.V[0]) && more(tr.V[1]) && more(tr.V[2]) {
-			fmt.Fprintf(w, "<!-- skip a triangle; it's above: %v -->\n", tr.V)
+			if verbose {
+				fmt.Fprintf(w, "<!-- skip a triangle; it's above: %v -->\n", tr.V)
+			}
 			continue
 		}
 
@@ -164,22 +176,33 @@ func slice(cmd *cobra.Command, args []string) {
 		}
 
 		// OK, it's the line. Two cases: line is a triangle side, or it's not.
-		// First, let's check if it's a triangle side.
 		was := false
 		for i := 0; i < 3; i++ {
 			j := (i + 1) % 3
+			k := (i + 2) % 3
+			// First, let's check if it's a triangle side.
 			if eq(tr.V[i]) && eq(tr.V[j]) {
 				fmt.Fprintf(w, "<path d='M%s L%s' />\n", pxy(tr.V[i]), pxy(tr.V[j]))
 				was = true
 				break
+			}
+			if less(tr.V[i]) && less(tr.V[j]) || more(tr.V[i]) && more(tr.V[j]) {
+				// Since this triangle is known to intersect the slice plane, the k'th vertex is on the other side.
+				// and we need to find intersection points on i-k and j-k triangle sides.
+				p0 := intersect(tr.V[i], tr.V[k])
+				p1 := intersect(tr.V[j], tr.V[k])
+				fmt.Fprintf(w, "<path d='M%s L%s' />\n", pxy(p0), pxy(p1))
+				was = true
 			}
 		}
 		if was {
 			continue
 		}
 
-		// The line is not a triangle side.
-		fmt.Fprintf(w, "<!-- here be a line -->\n")
+		// Just a dot
+		if verbose {
+			fmt.Fprintf(w, "<!-- it's just a dot: %v -->\n", tr)
+		}
 	}
 
 	// Write SVG footer
@@ -226,6 +249,8 @@ If no STL file is specified, it will read from stdin.`,
 		Run: slice,
 	}
 	sliceCmd.Flags().StringVarP(&outPath, "output", "o", "", "Output SVG file. By default, it's stdout.")
+	sliceCmd.Flags().BoolVarP(&verbose, "verbose", "v", false,
+		"Verbosity. If verbose, skipped triangles will leave comments in the output SVG file.")
 	sliceCmd.Flags().Float64VarP(&coordX, "x", "x", 0, "If specified, it will slice with YZ plane at specified x.")
 	sliceCmd.Flags().Float64VarP(&coordY, "y", "y", 0, "If specified, it will slice with XZ plane at specified y.")
 	sliceCmd.Flags().Float64VarP(&coordZ, "z", "z", 0, "If specified, it will slice with XY plane at specified z.")
