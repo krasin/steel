@@ -82,7 +82,7 @@ func scale(cmd *cobra.Command, args []string) {
 			}
 		}
 	}
-	if err := stl.Write(w, t); err != nil {
+	if err := stl.WriteBinary(w, t); err != nil {
 		fail("Failed to write STL file:", err)
 	}
 }
