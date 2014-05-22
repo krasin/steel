@@ -1,6 +1,6 @@
 # Steel
 
-[![](https://goci.herokuapp.com/project/image/github.com/krasin/steel)](http://goci.me/project/github.com/krasin/steel)
+[![Build Status](https://travis-ci.org/krasin/steel.svg?branch=master)](https://travis-ci.org/krasin/steel)
 
 A command-line utility to tinker with STL files.
 
