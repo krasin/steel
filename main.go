@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/krasin/cobra"
 	"github.com/krasin/stl"
 )
 
 const sliceThreshold = 0.001
+const cutThreshold = 0.0001
 
 var (
 	scaleX  float64
@@ -210,6 +212,198 @@ func slice(cmd *cobra.Command, args []string) {
 	fmt.Fprintln(w, "</svg>")
 }
 
+// uniqVertices removes equal points which are located in the adjacent positions.
+func uniqVertices(v []stl.Point) []stl.Point {
+	if len(v) == 0 {
+		return nil
+	}
+	res := []stl.Point{v[0]}
+	for i := 1; i < len(v); i++ {
+		if v[i] == res[len(res)-1] {
+			continue
+		}
+		res = append(res, v[i])
+	}
+	return res
+}
+
+// trimTriangleBelow trims the triangle with the provided surface and returns the list of resulting triangles.
+func trimTriangleBelow(tr stl.Triangle, below, above func(p stl.Point) bool, intersect func(p1, p2 stl.Point) stl.Point) []stl.Triangle {
+	eq := func(p stl.Point) bool { return !above(p) && !below(p) }
+
+	var v []stl.Point
+	for i := 0; i < 3; i++ {
+		cur := tr.V[i]
+		next := tr.V[(i+1)%3]
+		// full edge will be in the result
+		if !above(cur) && !above(next) {
+			v = append(v, cur, next)
+			continue
+		}
+		// edge is fully above, ignore both vertices
+		if above(cur) && above(next) {
+			continue
+		}
+
+		// one vertice is above, another is on the border
+		if eq(cur) && above(next) {
+			v = append(v, cur)
+			continue
+		}
+		if above(cur) && eq(next) {
+			v = append(v, next)
+			continue
+		}
+		// the remaining case: one is below, another is above
+		if below(cur) && above(next) {
+			v = append(v, cur, intersect(cur, next))
+			continue
+		}
+		if above(cur) && below(next) {
+			v = append(v, intersect(cur, next), next)
+			continue
+		}
+		panic("unreachable. If this code is executed, there's a bug in the code related how the split surface is defined.")
+	}
+	// remove duplicates
+	v = uniqVertices(v)
+	// fix up: it could be that the first and the last vertices are the same; uniqVertices will not detect them
+	if len(v) > 1 && v[0] == v[len(v)-1] {
+		v = v[:len(v)-1]
+	}
+
+	// now, we need to calculate the number of vertices.
+
+	// 0 triangles
+	if len(v) < 3 {
+		return nil
+	}
+	// 1 triangle
+	if len(v) == 3 {
+		return []stl.Triangle{
+			{
+				N: tr.N,
+				V: [3]stl.Point{v[0], v[1], v[2]},
+			},
+		}
+	}
+	// 2 triangles
+	if len(v) == 4 {
+		return []stl.Triangle{
+			{
+				N: tr.N,
+				V: [3]stl.Point{v[0], v[1], v[2]},
+			},
+			{
+				N: tr.N,
+				V: [3]stl.Point{v[2], v[3], v[0]},
+			},
+		}
+	}
+	panic(fmt.Errorf("unreachable. len(v) = %d. If this code is executed, there's a bug in the code that splits a triangle with the surfaces provided", len(v)))
+}
+
+func cut(cmd *cobra.Command, args []string) {
+	r, err := openIn(args)
+	if err != nil {
+		fail(err)
+	}
+	defer r.Close()
+
+	if outPath == "" {
+		fail(errors.New("--output is not specified"))
+	}
+
+	// Find output file base. For example: /home/user/lala.stl -> /home/user/lala, and
+	// then it will become /home/user/{lala001.stl,lala002.stl}.
+	outExt := filepath.Ext(outPath)
+	outBase := outPath[:len(outPath)-len(outExt)]
+
+	// Read input STL
+	t, err := stl.Read(r)
+	if err != nil {
+		fail("Failed to read STL file:", err)
+	}
+
+	// by default, cut with XY plane at z = 0
+	si := 2
+	var sv float32
+	cnt := 0
+
+	for i, v := range []float64{coordX, coordY, coordZ} {
+		if v != 0 {
+			si = i
+			sv = float32(v)
+			cnt++
+		}
+	}
+	if cnt > 1 {
+		fail("More than one coord is specified: x: %f, y: %f, z: %f", coordX, coordY, coordZ)
+	}
+
+	min, max := stl.BoundingBox(t)
+	eps := (max[si] - min[si]) * cutThreshold
+
+	below := func(p stl.Point) bool { return p[si] < sv-eps }
+	above := func(p stl.Point) bool { return p[si] > sv+eps }
+
+	intersect := func(p0, p1 stl.Point) (res stl.Point) {
+		alpha := (sv - p0[si]) / (p1[si] - p0[si])
+		for i := 0; i < 3; i++ {
+			res[i] = p0[i] + alpha*(p1[i]-p0[i])
+		}
+		return
+	}
+
+	// We'll have two output parts: below and above.
+	parts := make([][]stl.Triangle, 2)
+
+	for _, tr := range t {
+		// For each triangle, we have the options:
+		// 1. put into bottom part (all vertices are not above)
+		// 2. put into upper part (all vertices are not below)
+		// 3. put into both parts (all vertices are equal) -- special case for the two rules above
+		// 4. split triangle into two parts, if some vertices are above, and some are below
+
+		simple := false
+
+		if !above(tr.V[0]) && !above(tr.V[1]) && !above(tr.V[2]) {
+			parts[0] = append(parts[0], tr)
+			simple = true
+		}
+		if !below(tr.V[0]) && !below(tr.V[1]) && !below(tr.V[2]) {
+			parts[1] = append(parts[1], tr)
+			simple = true
+		}
+		if simple {
+			continue
+		}
+
+		// We'll need to split the triangle into bottom and upper parts.
+		tmp := trimTriangleBelow(tr, below, above, intersect)
+		parts[0] = append(parts[0], tmp...)
+
+		tmp = trimTriangleBelow(tr, above, below, intersect)
+		parts[1] = append(parts[1], tmp...)
+	}
+
+	// Now, we need to save both parts.
+	for i := 0; i < 2; i++ {
+		w, err := openOut(fmt.Sprintf("%s%03d%s", outBase, i, outExt))
+		if err != nil {
+			fail("Failed to open output file: ", err)
+		}
+
+		if err := stl.WriteASCII(w, parts[i]); err != nil {
+			w.Close()
+			fail("Failed to save an output STL: ", err)
+		}
+		if err := w.Close(); err != nil {
+			fail("Failed to close the output file: ", err)
+		}
+	}
+}
+
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "steel",
@@ -255,6 +449,19 @@ If no STL file is specified, it will read from stdin.`,
 	sliceCmd.Flags().Float64VarP(&coordY, "y", "y", 0, "If specified, it will slice with XZ plane at specified y.")
 	sliceCmd.Flags().Float64VarP(&coordZ, "z", "z", 0, "If specified, it will slice with XY plane at specified z.")
 	rootCmd.AddCommand(sliceCmd)
+
+	cutCmd := &cobra.Command{
+		Use:   "cut [STL file]",
+		Short: "Cut mesh by a plane into two parts",
+		Long: `cut mesh by a specified plan into two parts and save them as STL.
+If no STL file is specified, it will read from stdin.`,
+		Run: cut,
+	}
+	cutCmd.Flags().StringVarP(&outPath, "output", "o", "", "The base for output STL files. For example, /home/user/lala.stl will result in /home/user/lala001.stl and /home/user/lala002.stl.")
+	cutCmd.Flags().Float64VarP(&coordX, "x", "x", 0, "If specified, it will сut with YZ plane at specified x.")
+	cutCmd.Flags().Float64VarP(&coordY, "y", "y", 0, "If specified, it will cut with XZ plane at specified y.")
+	cutCmd.Flags().Float64VarP(&coordZ, "z", "z", 0, "If specified, it will cut with XY plane at specified z.")
+	rootCmd.AddCommand(cutCmd)
 
 	rootCmd.Execute()
 }
