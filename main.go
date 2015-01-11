@@ -28,14 +28,15 @@ func fail(args ...interface{}) {
 	os.Exit(1)
 }
 
-func openIn(files []string) (io.ReadCloser, error) {
+func openIn(files []string) (string, io.ReadCloser, error) {
 	if len(files) == 0 {
-		return os.Stdin, nil
+		return "", os.Stdin, nil
 	}
 	if len(files) > 1 {
-		return nil, errors.New("multiple input files are not supported yet")
+		return "", nil, errors.New("multiple input files are not supported yet")
 	}
-	return os.Open(files[0])
+	f, err := os.Open(files[0])
+	return files[0], f, err
 }
 
 func openOut(path string) (io.WriteCloser, error) {
@@ -46,7 +47,7 @@ func openOut(path string) (io.WriteCloser, error) {
 }
 
 func info(cmd *cobra.Command, args []string) {
-	r, err := openIn(args)
+	name, r, err := openIn(args)
 	if err != nil {
 		fail(err)
 	}
@@ -55,13 +56,14 @@ func info(cmd *cobra.Command, args []string) {
 	if err != nil {
 		fail("Failed to read STL file:", err)
 	}
+	fmt.Printf("File: %s\n", name)
 	fmt.Printf("Triangles: %d\n", len(t))
 	min, max := stl.BoundingBox(t)
 	fmt.Printf("Bounding box: %v - %v\n", min, max)
 }
 
 func scale(cmd *cobra.Command, args []string) {
-	r, err := openIn(args)
+	_, r, err := openIn(args)
 	if err != nil {
 		fail(err)
 	}
@@ -90,7 +92,7 @@ func scale(cmd *cobra.Command, args []string) {
 }
 
 func slice(cmd *cobra.Command, args []string) {
-	r, err := openIn(args)
+	_, r, err := openIn(args)
 	if err != nil {
 		fail(err)
 	}
@@ -304,7 +306,7 @@ func trimTriangleBelow(tr stl.Triangle, below, above func(p stl.Point) bool, int
 }
 
 func cut(cmd *cobra.Command, args []string) {
-	r, err := openIn(args)
+	_, r, err := openIn(args)
 	if err != nil {
 		fail(err)
 	}
