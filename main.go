@@ -54,7 +54,7 @@ func info(cmd *cobra.Command, args []string) {
 	defer r.Close()
 	t, err := stl.Read(r)
 	if err != nil {
-		fail("Failed to read STL file:", err)
+		fail(fmt.Sprintf("Failed to read STL file %q: %v", name, err))
 	}
 	fmt.Printf("File: %s\n", name)
 	fmt.Printf("Triangles: %d\n", len(t))
