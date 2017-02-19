@@ -11,7 +11,7 @@ import (
 	"github.com/krasin/stl"
 )
 
-const sliceThreshold = 0.00001
+const sliceThreshold = 0.000001
 const cutThreshold = 0.0001
 
 var (
@@ -82,7 +82,7 @@ func scale(cmd *cobra.Command, args []string) {
 		tr := &t[i]
 		for j := 0; j < 3; j++ {
 			for k := 0; k < 3; k++ {
-				tr.V[j][k] = float32(scaleX * float64(tr.V[j][k]))
+				tr.V[j][k] = scaleX * tr.V[j][k]
 			}
 		}
 	}
@@ -111,13 +111,13 @@ func slice(cmd *cobra.Command, args []string) {
 	si := 2
 	sx := 0
 	sy := 0
-	var sv float32
+	var sv float64
 	cnt := 0
 
 	for i, v := range []float64{coordX, coordY, coordZ} {
 		if v != 0 {
 			si, sx, sy = i, (i+1)%3, (i+2)%3
-			sv = float32(v)
+			sv = v
 			cnt++
 		}
 	}
@@ -140,7 +140,7 @@ func slice(cmd *cobra.Command, args []string) {
 	}
 
 	// SVG file will have units of 0.01 mm, and the input STL file is treated as mm.
-	pmm := func(v float32) int { return int(v * 100) }
+	pmm := func(v float64) int { return int(v * 100) }
 	width := pmm(max[sx] - min[sx])
 	height := pmm(max[sy] - min[sy])
 
@@ -152,8 +152,8 @@ func slice(cmd *cobra.Command, args []string) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, `<g fill="gray" stroke="black" stroke-width="10">`)
 
-	xx := func(v float32) int { return pmm(v - min[sx]) }
-	yy := func(v float32) int { return pmm(v - min[sy]) }
+	xx := func(v float64) int { return pmm(v - min[sx]) }
+	yy := func(v float64) int { return pmm(v - min[sy]) }
 	pxy := func(p stl.Point) string { return fmt.Sprintf("%d,%d", xx(p[sx]), yy(p[sy])) }
 
 	for _, tr := range t {
@@ -329,13 +329,13 @@ func cut(cmd *cobra.Command, args []string) {
 
 	// by default, cut with XY plane at z = 0
 	si := 2
-	var sv float32
+	var sv float64
 	cnt := 0
 
 	for i, v := range []float64{coordX, coordY, coordZ} {
 		if v != 0 {
 			si = i
-			sv = float32(v)
+			sv = v
 			cnt++
 		}
 	}
