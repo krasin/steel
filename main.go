@@ -11,7 +11,7 @@ import (
 	"github.com/krasin/stl"
 )
 
-const sliceThreshold = 0.001
+const sliceThreshold = 0.00001
 const cutThreshold = 0.0001
 
 var (
