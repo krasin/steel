@@ -16,6 +16,8 @@ const cutThreshold = 0.0001
 
 var (
 	scaleX  float64
+	scaleY  float64
+	scaleZ  float64
 	coordX  float64
 	coordY  float64
 	coordZ  float64
@@ -81,9 +83,9 @@ func scale(cmd *cobra.Command, args []string) {
 	for i := range t {
 		tr := &t[i]
 		for j := 0; j < 3; j++ {
-			for k := 0; k < 3; k++ {
-				tr.V[j][k] = scaleX * tr.V[j][k]
-			}
+			tr.V[j][0] *= scaleX
+			tr.V[j][1] *= scaleY
+			tr.V[j][2] *= scaleZ
 		}
 	}
 	if err := stl.WriteBinary(w, t); err != nil {
@@ -433,7 +435,9 @@ If no STL file is specified, it will read from stdin`,
 If no STL file is specified, it will read from stdin.`,
 		Run: scale,
 	}
-	scaleCmd.Flags().Float64VarP(&scaleX, "x", "x", 1, "Scale factor")
+	scaleCmd.Flags().Float64VarP(&scaleX, "x", "x", 1, "Scale factor by X")
+	scaleCmd.Flags().Float64VarP(&scaleZ, "y", "y", 1, "Scale factor by Y")
+	scaleCmd.Flags().Float64VarP(&scaleZ, "z", "z", 1, "Scale factor by Z")
 	scaleCmd.Flags().StringVarP(&outPath, "output", "o", "", "Output STL file. By default, it's stdout.")
 	rootCmd.AddCommand(scaleCmd)
 
