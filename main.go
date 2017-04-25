@@ -80,6 +80,9 @@ func scale(cmd *cobra.Command, args []string) {
 	if err != nil {
 		fail("Failed to read STL file:", err)
 	}
+	if scaleX < 1E-6 || scaleY < 1E-6 || scaleZ < 1E-6 {
+		fail(fmt.Sprintf("One or more scale ratios are too small. kX: %f, kY: %f, kZ: %f", scaleX, scaleY, scaleZ))
+	}
 	for i := range t {
 		tr := &t[i]
 		for j := 0; j < 3; j++ {
@@ -436,7 +439,7 @@ If no STL file is specified, it will read from stdin.`,
 		Run: scale,
 	}
 	scaleCmd.Flags().Float64VarP(&scaleX, "x", "x", 1, "Scale factor by X")
-	scaleCmd.Flags().Float64VarP(&scaleZ, "y", "y", 1, "Scale factor by Y")
+	scaleCmd.Flags().Float64VarP(&scaleY, "y", "y", 1, "Scale factor by Y")
 	scaleCmd.Flags().Float64VarP(&scaleZ, "z", "z", 1, "Scale factor by Z")
 	scaleCmd.Flags().StringVarP(&outPath, "output", "o", "", "Output STL file. By default, it's stdout.")
 	rootCmd.AddCommand(scaleCmd)
